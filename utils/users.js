@@ -1,8 +1,10 @@
 const users = []
 let games=[]
-const startGame=({room})=>{
+const startGame=(room)=>{
+    console.log("here")
+    console.log(room)
     games=games.filter((g)=>g.room!=room)
-    games.add({room,round:0,player:0,
+    games.push({room,round:0,player:0,
         players:users.filter((user)=>user.room==room).map((user)=>{
             return {
                 user,
@@ -12,9 +14,10 @@ const startGame=({room})=>{
             }
         })
     })
+    console.log(games)
 
 }
-const getGame=({room})=>{
+const getGame=(room)=>{
     return games.find((game)=>game.room==room)
 }
 
@@ -102,5 +105,6 @@ module.exports = {
     removeUser,
     getUser,
     getUsersInRoom,
-    startGame
+    startGame,
+    getGame
 }

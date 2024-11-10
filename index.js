@@ -3,7 +3,7 @@ const http = require('http');
 const express = require('express');
 const socketio = require('socket.io');
 const cors = require('cors');
-const { addUser, removeUser, getUser, getUsersInRoom,startGame } = require('./utils/users');
+const { addUser, removeUser, getUser, getUsersInRoom,startGame,getGame } = require('./utils/users');
 const { generateMessage } = require('./utils/messages');
 
 const app = express();
@@ -81,13 +81,11 @@ io.on('connection', (socket) => {
       }
 
       socket.to(user.room).emit('gameStarted',options)
+      console.log(user.room)
       startGame(user.room)
       const game=getGame(user.room)
-      game.players.forEach((player, index) => {
-        setTimeout(() => {
-          startTurn(game, player.user.id);
-        }, index * options.turnDuration * 1000); // Set time delay for each player's turn
-      });
+      executeGame(game,options)
+      //startGame(game);
     });
 
     callback();
@@ -106,6 +104,49 @@ io.on('connection', (socket) => {
     }
   });
 });
+function delayWithEventCancel(socket, eventName, ms) {
+  return new Promise((resolve) => {
+    const timer = setTimeout(resolve, ms);
+
+    // Listen for the specified event on the socket
+    socket.once(eventName, () => {
+      clearTimeout(timer); // Cancel the delay
+      resolve();           // Resolve the promise immediately
+    });
+  });
+}
+
+async function executeGame(game,options){
+  console.log(game,options);
+  console.log('gameis running')
+  console.log(game.players)
+  for(var i=0;i<options.noOfRounds;i++){
+    for(player of game.players){
+
+      
+      const playerSocket = io.sockets.sockets.get(player.user.id);
+      
+      if(playerSocket){
+        console.log("jdfk");
+        const words = generateRandomWords(3);
+        console.log(words)
+        playerSocket.emit('chooseWord', words);
+        playerSocket.to(player.user.room).emit('choosing',player.user.username)
+        await Promise.race([
+          delayWithEventCancel(playerSocket, 'startDraw', 25000), // 60 seconds delay or until 'cancelDelay' event
+        ]);
+        playerSocket.to(player.user.room).emit('drawing',player.user.username)
+        const timer=setTimeout(10000)
+
+        // At this point, either the delay has completed, or the event was triggered to cancel it
+        console.log("Continuing to next player or ending round");
+
+      }
+      
+
+    }
+  }
+}
 function startTurn(game, playerId) {
   const playerSocket = io.sockets.sockets.get(playerId);
 
