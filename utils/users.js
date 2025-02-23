@@ -4,7 +4,7 @@ const startGame=(room)=>{
     console.log("here")
     console.log(room)
     games=games.filter((g)=>g.room!=room)
-    games.push({room,round:0,player:0,
+    games.push({room,round:0,player:0,turn:0,
         players:users.filter((user)=>user.room==room).map((user)=>{
             return {
                 user,
@@ -12,7 +12,10 @@ const startGame=(room)=>{
 
 
             }
-        })
+        }),
+        timer:null,
+        options:null,
+        guessers:[]
     })
     console.log(games)
 
