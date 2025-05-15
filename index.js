@@ -71,6 +71,7 @@ io.on('connection', (socket) => {
           io.to(game.room).emit("correctGuess", {
             message: `${player.user.username} has correctly guessed the word!`,
           });
+          
   
           if (game.guessers.length === game.players.length - 1) {
             game.round++;
@@ -89,6 +90,11 @@ io.on('connection', (socket) => {
     socket.on('mouseup', (data) => {
         // Broadcast draw data to other users in the same room
         socket.to(user.room).emit('mouseup', data);
+      });
+
+      socket.on('colorChange', (data) => {
+        // Broadcast draw data to other users in the same room
+        socket.to(user.room).emit('colorChange', data);
       });
 
    
@@ -133,19 +139,91 @@ io.on('connection', (socket) => {
 
 
 
-function startRound(word, game) {
- 
+function startRound(chosenWord, game) {
+  game.currentWord = chosenWord;
+  game.guessers = [];
+  const drawerId = game.players[game.turn % game.players.length].user.id;
+  const startTime = Date.now();
+  game.roundScores = {};
 
+  const guessListener = (socket) => (guessedWord) => {
+    const player = game.players.find(p => p.user.id === socket.id);
+    if (!player) return;
 
+    // ✅ Wrong guess → broadcast to all
+    if (guessedWord !== game.currentWord) {
+      io.to(game.room).emit('message', {
+        username: player.user.username,
+        guess: guessedWord,
+        correct: false
+      });
+      return;
+    }
 
- 
+    // ✅ Correct guess
+    if (!game.guessers.includes(socket.id) && socket.id !== drawerId) {
+      game.guessers.push(socket.id);
+      const timeTaken = (Date.now() - startTime) / 1000;
+      const points = Math.max(500 - Math.floor(timeTaken * 10), 50);
 
-  game.timer=setTimeout(()=>{
-    game.turn=game.turn+1
-    game.round=game.round+1
-    pickWord(game)
-    return  
-  },60000)
+      const drawer = game.players.find(p => p.user.id === drawerId);
+
+      // ✅ Update scores
+      player.score = (player.score || 0) + points;
+      game.roundScores[player.user.username] = points;
+
+      drawer.score = (drawer.score || 0) + 100;
+      game.roundScores[drawer.user.username] = (game.roundScores[drawer.user.username] || 0) + 100;
+
+      // ✅ Send correct word privately to guesser
+      socket.emit('correctWordReveal', {
+        word: game.currentWord
+      });
+
+      // ✅ Broadcast success message
+      io.to(game.room).emit('message', {
+        username: player.user.username,
+        correct: true
+      });
+
+      if (game.guessers.length >= game.players.length - 1) {
+        clearTimeout(game.timer);
+        endRound(game);
+      }
+    }
+  };
+
+  // Attach guess listeners to non-drawer players
+  game.players.forEach(p => {
+    if (p.user.id !== drawerId) {
+      const socket = io.sockets.sockets.get(p.user.id);
+      if (socket) socket.once('guess', guessListener(socket));
+    }
+  });
+
+  game.timer = setTimeout(() => endRound(game), 60000);
+}
+
+function endRound(game) {
+  const drawer = game.players[game.turn % game.players.length].user.username;
+  io.to(game.room).emit('roundEnded', {
+    drawer,
+    word: game.currentWord,
+    roundScores: game.roundScores,
+    totalScores: game.players.map(p => ({
+      username: p.user.username,
+      score: p.score || 0
+    }))
+  });
+
+  game.turn++;
+
+  // Next round only after everyone has drawn once
+  if ((game.turn % game.players.length) === 0) {
+    game.round++;
+  }
+
+  pickWord(game);
 }
 
 async function pickWord(game){
@@ -162,8 +240,14 @@ async function pickWord(game){
   playerSocket.on('wordChosen',(word)=>{
     clearTimeout(game.timer)
     console.log("nxnx")
-    io.to(game.room).except(playerSocket).emit('drawing');
-    playerSocket.emit('startDraw')
+    io.to(game.room).except(playerSocket).emit('drawing',{totalScores: game.players.map(p => ({
+      username: p.user.username,
+      score: p.score || 0
+    })),wordLength:word.length});
+    playerSocket.emit('startDraw',{totalScores: game.players.map(p => ({
+      username: p.user.username,
+      score: p.score || 0
+    }))})
     startRound(word,game)
     return;
 
@@ -172,7 +256,15 @@ async function pickWord(game){
 
     let word=words[0];
     io.to(game.room).except(playerSocket).emit('drawing');
-    playerSocket.emit('startDraw')
+    playerSocket.emit('startDraw',{totalScores: game.players.map(p => ({
+      username: p.user.username,
+      score: p.score || 0
+    }))}
+     
+
+
+
+    )
     startRound(word,game);
     return
 
@@ -187,7 +279,7 @@ async function pickWord(game){
 }
 async function executeGame(game,options){
   console.log(game,options);
-  console.log('gameis running')
+  console.log('game is running')
   console.log(game.players)
   console.log(options)
   game.options=options
