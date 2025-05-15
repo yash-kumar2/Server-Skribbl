@@ -149,38 +149,25 @@ function startRound(chosenWord, game) {
   const guessListener = (socket) => (guessedWord) => {
     const player = game.players.find(p => p.user.id === socket.id);
     if (!player) return;
+    if (socket.id === drawerId) return;
 
-    // ✅ Wrong guess → broadcast to all
-    if (guessedWord !== game.currentWord) {
-      io.to(game.room).emit('message', {
-        username: player.user.username,
-        guess: guessedWord,
-        correct: false
-      });
-      return;
-    }
+    if (game.guessers.includes(socket.id)) return;
 
-    // ✅ Correct guess
-    if (!game.guessers.includes(socket.id) && socket.id !== drawerId) {
+    if (guessedWord === game.currentWord) {
       game.guessers.push(socket.id);
       const timeTaken = (Date.now() - startTime) / 1000;
       const points = Math.max(500 - Math.floor(timeTaken * 10), 50);
 
       const drawer = game.players.find(p => p.user.id === drawerId);
 
-      // ✅ Update scores
       player.score = (player.score || 0) + points;
       game.roundScores[player.user.username] = points;
 
       drawer.score = (drawer.score || 0) + 100;
       game.roundScores[drawer.user.username] = (game.roundScores[drawer.user.username] || 0) + 100;
 
-      // ✅ Send correct word privately to guesser
-      socket.emit('correctWordReveal', {
-        word: game.currentWord
-      });
+      socket.emit('correctWordReveal', { word: game.currentWord });
 
-      // ✅ Broadcast success message
       io.to(game.room).emit('message', {
         username: player.user.username,
         correct: true
@@ -190,14 +177,22 @@ function startRound(chosenWord, game) {
         clearTimeout(game.timer);
         endRound(game);
       }
+    } else {
+      io.to(game.room).emit('message', {
+        username: player.user.username,
+        guess: guessedWord,
+        correct: false
+      });
     }
   };
 
-  // Attach guess listeners to non-drawer players
   game.players.forEach(p => {
     if (p.user.id !== drawerId) {
       const socket = io.sockets.sockets.get(p.user.id);
-      if (socket) socket.once('guess', guessListener(socket));
+      if (socket) {
+        socket.removeAllListeners('guess');
+        socket.on('guess', guessListener(socket));
+      }
     }
   });
 
@@ -206,6 +201,7 @@ function startRound(chosenWord, game) {
 
 function endRound(game) {
   const drawer = game.players[game.turn % game.players.length].user.username;
+
   io.to(game.room).emit('roundEnded', {
     drawer,
     word: game.currentWord,
@@ -213,18 +209,19 @@ function endRound(game) {
     totalScores: game.players.map(p => ({
       username: p.user.username,
       score: p.score || 0
-    }))
+    })),
+    round: game.round
   });
 
   game.turn++;
 
-  // Next round only after everyone has drawn once
   if ((game.turn % game.players.length) === 0) {
     game.round++;
   }
 
   pickWord(game);
 }
+
 
 async function pickWord(game){
   if (game.round > game.options.round) {
