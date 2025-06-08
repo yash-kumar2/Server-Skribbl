@@ -219,7 +219,9 @@ function endRound(game) {
     game.round++;
   }
 
-  pickWord(game);
+  setTimeout(() => {
+    pickWord(game);
+  }, 8000);
 }
 
 
