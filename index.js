@@ -9,7 +9,7 @@ const { generateMessage } = require('./utils/messages');
 const app = express();
 const server = http.createServer(app);
 
-// Apply CORS directly to Socket.io
+
 const io = socketio(server, {
   cors: {
     origin: "http://localhost:5173",
@@ -20,7 +20,7 @@ const io = socketio(server, {
 const port = process.env.PORT || 3000;
 const publicDirectoryPath = path.join(__dirname, '../public');
 
-// CORS middleware for Express
+
 app.use(cors({
   origin: "http://localhost:5173",
   methods: ["GET", "POST"],
@@ -52,7 +52,7 @@ io.on('connection', (socket) => {
 
     socket.join(user.room);
 
-    // Send welcome message and notify room about the new user
+ 
 
     socket.broadcast.to(user.room).emit('message', generateMessage('Admin', `${user.username} has joined!`));
     io.to(user.room).emit('roomData', {
@@ -116,6 +116,8 @@ io.on('connection', (socket) => {
       console.log(user.room)
       startGame(user.room)
       const game=getGame(user.room)
+      //game.options=options
+    
       executeGame(game,options)
      
     });
@@ -218,11 +220,31 @@ function endRound(game) {
   if ((game.turn % game.players.length) === 0) {
     game.round++;
   }
+  if(game.round==game.options.noOfRounds){
+
+    displayResults(game)
+    return;
+  }
 
   setTimeout(() => {
     pickWord(game);
   }, 8000);
 }
+
+function displayResults(game) {
+  io.to(game.room).emit('gameEnded', {
+    finalScores: game.players.map(p => ({
+      username: p.user.username,
+      score: p.score || 0
+    }))
+  });
+
+  // Optional: Clean up game state
+  clearTimeout(game.timer);
+  game.ended = true;
+}
+
+
 
 
 async function pickWord(game){
