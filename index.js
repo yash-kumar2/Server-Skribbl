@@ -5,6 +5,7 @@ const socketio = require('socket.io');
 const cors = require('cors');
 const { addUser, removeUser, getUser, getUsersInRoom,startGame,getGame } = require('./utils/users');
 const { generateMessage } = require('./utils/messages');
+const { getWordsUpToCount } = require('./Resources/Words');
 
 const app = express();
 const server = http.createServer(app);
@@ -37,14 +38,9 @@ app.get('/active', (req, res) => {
     });
 });
 function generateRandomWords(count) {
-  const words = ["apple", "tree", "mountain", "river", "car", "phone", "book", "house", "flower"]; // Add more words as needed
-  const selectedWords = [];
-  while (selectedWords.length < count) {
-    const randomWord = words[Math.floor(Math.random() * words.length)];
-    if (!selectedWords.includes(randomWord)) {
-      selectedWords.push(randomWord);
-    }
-  }
+  const words = getWordsUpToCount(count);
+  const selectedWords = [words[1],words[0],words[2]];
+  
   return selectedWords;
 }
 
@@ -270,7 +266,7 @@ function displayResults(game) {
 async function pickWord(game){
   
 
-  const words = generateRandomWords(3);
+  const words = generateRandomWords(game.options.wordCount);
   
   const playerSocket = io.sockets.sockets.get(game.players[game.turn%game.players.length].user.id);
   console.log(game.players[game.turn%game.players.length].user.id)
