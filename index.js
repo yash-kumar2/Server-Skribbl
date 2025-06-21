@@ -28,6 +28,14 @@ app.use(cors({
 }));
 
 app.use(express.static(publicDirectoryPath));
+app.get('/active', (req, res) => {
+    res.status(200).json({
+        status: 'active',
+        message: 'Server is running',
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime()
+    });
+});
 function generateRandomWords(count) {
   const words = ["apple", "tree", "mountain", "river", "car", "phone", "book", "house", "flower"]; // Add more words as needed
   const selectedWords = [];
